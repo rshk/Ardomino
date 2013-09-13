@@ -1,14 +1,14 @@
 /////////////////////////////////////////////////////////////////////////////
-// ArdOmino Sketch Test  
-// Biometeorological ArdOmino Skecth to monitor Air Temperature and Relative Humidity. 
-// Application Case https://github.com/alfcrisci/Ardomino presented 
+// ArdOmino Sketch Test
+// Biometeorological ArdOmino Skecth to monitor Air Temperature and Relative Humidity.
+// Application Case https://github.com/alfcrisci/Ardomino presented
 // OfficinaIbimet IBIMET CNR http://www.fi.ibimet.cnr.it/
 // Author: Alessandor Matese - Alfonso Crisci - OfficinaIbimet
-// General scheme and function are done by Mirko Mancini in his work thesis 
-// DESIGN AND IMPLEMENTATION OF AN AMBIENT INTELLIGENCE SYSTEM BASED ON ARDUINO AND ANDROID Universita di Parma FAC. DI INGEGNERIA CORSO DI LAUREA IN INGEGNERIA INFORMATICA 
+// General scheme and function are done by Mirko Mancini in his work thesis
+// DESIGN AND IMPLEMENTATION OF AN AMBIENT INTELLIGENCE SYSTEM BASED ON ARDUINO AND ANDROID Universita di Parma FAC. DI INGEGNERIA CORSO DI LAUREA IN INGEGNERIA INFORMATICA
 // Mirko Mancin - mirkomancin90@gmail.com  website:  www.mancio90.it forum http://forum.arduino.cc/index.php?topic=157524.0;wap2
 // Library reference
-// https://github.com/adafruit/DHT-sensor-library 
+// https://github.com/adafruit/DHT-sensor-library
 // https://github.com/harlequin-tech/WiFlyHQ
 
 /////////////////////////////////////////////////////////////////////////////
@@ -21,18 +21,18 @@
 
 DHT dht; // global variable declaration for sensor's class
 
-// Macro Resettig for Microcontroller 
+// Macro Resettig for Microcontroller
 
 #include <avr/io.h>
-#include <avr/wdt.h> 
+#include <avr/wdt.h>
 #define Reset_AVR() wdt_enable(WDTO_30MS); while(1) {}
 
 // Reset every hour to prevent wifly comunication trouble
 
-#define Reset_After_1hour 3600000    
+#define Reset_After_1hour 3600000
 #define Periodo_Invio_Dati 3000     // minimun range time sending interval.(ms)
 
-// WIFI SETTINGS wireless account RN 171 XV 
+// WIFI SETTINGS wireless account RN 171 XV
 
 WiFly wifly;
 
@@ -59,8 +59,8 @@ SoftwareSerial wifi(8,9);
 unsigned long time = 0;
 unsigned long SendTime = 0;;
 
-char rh_airBuffer[8];    
-char temp_airBuffer[8];    
+char rh_airBuffer[8];
+char temp_airBuffer[8];
 char timestamp[8];
 
 // buffer to save for json string
@@ -71,7 +71,7 @@ void setup(){
   Serial.println(" --- ARDOMINO MONITORING --- ");
   delay(1000);
   Serial.println("Ardomino  started, End Setup !");
-  randomSeed(analogRead(A2)); 
+  randomSeed(analogRead(A2));
   dht.setup(2); // Pin defining for DHT22 sensors and variables
 
 }
@@ -79,26 +79,26 @@ void setup(){
 
 void loop(){
     delay (100);
-    time = millis(); 	
+    time = millis();
     configWIFI();
     SendTime = millis();
-	
+
     delay(dht.getMinimumSamplingPeriod());
     float humidity = dht.getHumidity();
     float temperature = dht.getTemperature();
     int tmp=0;
     tmp = analogRead(0);
-  
+
   // value to string conversion
-  
+
     dtostrf(temperature, 5, 2, temp_airBuffer);
     dtostrf(humidity , 5, 2, rh_airBuffer);
-   
-       
-    // Create json strings for HTTP POST 
-    
+
+
+    // Create json strings for HTTP POST
+
 	Serial.println("Create  JSON strings");
-    	
+
 	    sprintf(jsonMsgBody,
 "{"
 "\"device_name\":\"%s\","
@@ -123,28 +123,28 @@ temp_airBuffer,
     Serial.println(dht.toFahrenheit(temperature), 1);
     Serial.print(jsonMsgBody);
     Serial.println(" ");
-    
-    // JSON string length assessement to make HTTP POST 
-    int i; 
+
+    // JSON string length assessement to make HTTP POST
+    int i;
     for(int i=0;jsonMsgBody[i]!=0; i++);
-    
-    Serial.println("Send sensors readings....");   
-	
-    
+
+    Serial.println("Send sensors readings....");
+
+
     InvioWIFIHttp(jsonMsgBody,i);
-  
-  
-   Serial.println("Sensors Readings Sent!."); 
-   Reset_AVR(); 
-           
+
+
+   Serial.println("Sensors Readings Sent!.");
+   Reset_AVR();
+
 }
 
 
 
 
 
-// Wireless configuration and restart in error with next reset. 
-// Function Author: Mirko Mancini 
+// Wireless configuration and restart in error with next reset.
+// Function Author: Mirko Mancini
 
 
 void configWIFI(){
@@ -154,7 +154,7 @@ void configWIFI(){
 
     wifi.begin(9600);    // define baud rate of Serial ArdOmino port
     if (!wifly.begin(&wifi, &Serial)) {
-        println_P(PSTR("Failed to start wifly"));
+	println_P(PSTR("Failed to start wifly"));
 	Reset_AVR();
     }
 
@@ -175,7 +175,7 @@ void configWIFI(){
 	    Reset_AVR();
 	}
     } else {
-        println_P(PSTR("Already joined network"));
+	println_P(PSTR("Already joined network"));
     }
 
     print_P(PSTR("MAC: "));
@@ -195,19 +195,19 @@ void configWIFI(){
     Serial.println(wifly.getDeviceID(buf, sizeof(buf)));
 
     if (wifly.isConnected()) {
-        println_P(PSTR("Old connection active. Closing"));
+	println_P(PSTR("Old connection active. Closing"));
 	wifly.close();
     }
-    
+
     if (wifly.open(SERVER_NAME, SERVER_PORT)) {
-        print_P(PSTR("Connected to "));
+	print_P(PSTR("Connected to "));
 	Serial.println(SERVER_NAME);
 
 	Serial.println("WIFI ALREADY");
     } else {
-        println_P(PSTR("Failed to connect"));
-        Reset_AVR();
-    }   
+	println_P(PSTR("Failed to connect"));
+	Reset_AVR();
+    }
 }
 
 // to print variable in memory
@@ -225,14 +225,14 @@ void println_P(const prog_char *str)
     Serial.println();
 }
 
-// Sending Json formatted data procedure 
-// Waiting server's response to send next data packet. 
-// Function Author Mirko Mancini 
+// Sending Json formatted data procedure
+// Waiting server's response to send next data packet.
+// Function Author Mirko Mancini
 
 
 
 void InvioWIFIHttp(char* jsonMsgBody, int lungh)
-{   
+{
     Serial.println("Creating POST HTTP....");
      /* Send the request */
     wifly.println("POST ardomino-rshk.rhcloud.com HTTP/1.0");
@@ -244,58 +244,58 @@ void InvioWIFIHttp(char* jsonMsgBody, int lungh)
     wifly.println("Connection: close");
     wifly.println("");
     wifly.println(jsonMsgBody);
-    
-    
-    
+
+
+
   Serial.println("Waiting server 's response");
   //Waiting server 's response
    // Loop while reading response
   //Waiting server 's response
   while(wifly.available()==0){}
-  
+
      if(wifly.available() > 0) {
        char buf[200] = "buffer";
        int exit = 0;
-       
+
        while(exit<2){
-           wifly.gets(buf, sizeof(buf));
-           Serial.println(buf);
-           if(buf[0]==0){ 
-             exit++; 
-           }
-           if(buf[0]=='{'){
-             delay(50);
-             long timeSend = parsingJSONString(buf, sizeof(buf));
-             timeSend *= 1000;
-            // Wating this value to reset microcontroller
-             delay(timeSend);            
-           }
-       }      
-    }   
+	   wifly.gets(buf, sizeof(buf));
+	   Serial.println(buf);
+	   if(buf[0]==0){
+	     exit++;
+	   }
+	   if(buf[0]=='{'){
+	     delay(50);
+	     long timeSend = parsingJSONString(buf, sizeof(buf));
+	     timeSend *= 1000;
+	    // Wating this value to reset microcontroller
+	     delay(timeSend);
+	   }
+       }
+    }
 }
 
-// function for raw JSON  parsing code Author Mirko Mancini 
+// function for raw JSON  parsing code Author Mirko Mancini
 
 long parsingJSONString(char buffer[], int len){
     int k;
     unsigned long m;
-    
+
     for(int i=0; i<len; i++){
       if((buffer[i]=='"')&&(buffer[i+1]=='c')&&(buffer[i+2]=='f')&&(buffer[i+3]=='g')&&(buffer[i+4]=='"')){
-        for(k=i+23; buffer[k]!='"'; k++){
-          Serial.print(buffer[k]);          
-        }
-        unsigned long value=0;
-        Serial.println();
-        
-        for(int l=k-1, m=1; l>i+22; l--){
-          value += m*((int)buffer[l]-48);
-          m *= 10;
-        }
-        
-        return value;
+	for(k=i+23; buffer[k]!='"'; k++){
+	  Serial.print(buffer[k]);
+	}
+	unsigned long value=0;
+	Serial.println();
+
+	for(int l=k-1, m=1; l>i+22; l--){
+	  value += m*((int)buffer[l]-48);
+	  m *= 10;
+	}
+
+	return value;
       }
     }
-    
+
     return 0;
 }
