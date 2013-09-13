@@ -235,16 +235,14 @@ void InvioWIFIHttp(char* jsonMsgBody, int lungh)
 {
     Serial.println("Creating POST HTTP....");
      /* Send the request */
-    wifly.println("POST ardomino-rshk.rhcloud.com HTTP/1.0");
+    wifly.println("POST / HTTP/1.0"); // The path here is relative
     wifly.println("Host: ardomino-rshk.rhcloud.com");
     wifly.println("Content-type: application/json");
     wifly.print("Content-Length: ");
     wifly.println(lungh);
-    wifly.println("");
     wifly.println("Connection: close");
-    wifly.println("");
+    wifly.println(""); // End of headers
     wifly.println(jsonMsgBody);
-
 
 
   Serial.println("Waiting server 's response");
