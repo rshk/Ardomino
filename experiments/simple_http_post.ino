@@ -3,8 +3,8 @@
 // Arduino Sketch: Example HTTP POST with WiFly
 //
 // Library reference
-//   https://github.com/adafruit/DHT-sensor-library
-//   https://github.com/harlequin-tech/WiFlyHQ
+// https://github.com/adafruit/DHT-sensor-library
+// https://github.com/harlequin-tech/WiFlyHQ
 //
 /////////////////////////////////////////////////////////////////////////////
 
@@ -45,11 +45,7 @@ const char PAYLOAD[] = "{\"hello\": \"world\"}";
 const int  PAYLOAD_SIZE = 18; // Length of the above string
 const char PAYLOAD_CONTENT_TYPE[] = "application/json; charset=utf-8";
 
-
-
-//char serverName[] = "http://149.139.8.55"; // Serve IP URL to connect
-
-// Does DNS resolution work on Wifly? (I hope so..)
+////////////////////////////////////////////////////////////
 
 WiFly wifly;
 char* macStr;
@@ -60,6 +56,9 @@ SoftwareSerial wifi(8, 9);
 // Writing procedure
 void print_P(const prog_char *str);
 void println_P(const prog_char *str);
+int configure_wifi();
+void send_data();
+void send_header(char* name, char* value);
 
 unsigned long time = 0;
 unsigned long SendTime = 0;;
@@ -93,7 +92,7 @@ void loop() {
  * Wireless configuration and restart in error with next reset.
  * Function Author: Mirko Mancini
  */
-int configure_wifi(){
+int configure_wifi() {
     println_P(PSTR("Starting wifi configuration"));
     print_P(PSTR("Free memory: "));
     Serial.println(wifly.getFreeMemory(), DEC);
@@ -241,62 +240,4 @@ void send_data() {
     }
   };
 
-
-
-  // Waiting server 's response
-  // while (wifly.available() == 0) {
-  //   delay(50);
-  // }
-
-  // if (wifly.available() > 0) {
-  //   char buf[200] = "buffer";
-  //   int exit = 0;
-
-  //   while (exit < 2){
-  //     wifly.gets(buf, sizeof(buf));
-  //     Serial.println(buf);
-  //     if(buf[0]==0){
-  // 	exit++;
-  //     }
-  //     // if(buf[0]=='{') {
-  //     // 	delay(50);
-  //     // 	long timeSend = parsingJSONString(buf, sizeof(buf));
-  //     // 	timeSend *= 1000;
-  //     // 	// Wating this value to reset microcontroller
-  //     // 	delay(timeSend);
-  //     // }
-  //   }
-  // }
 }
-
-// function for raw JSON  parsing code Author Mirko Mancini
-// long parsingJSONString(char buffer[], int len){
-//     int k;
-//     unsigned long m;
-
-//     for (int i = 0; i < len; i++) {
-//       if (
-// 	  (buffer[i]=='"') &&
-// 	  (buffer[i+1]=='c') &&
-// 	  (buffer[i+2]=='f') &&
-// 	  (buffer[i+3]=='g') &&
-// 	  (buffer[i+4]=='"')) {
-
-// 	for (k = i + 23; buffer[k] != '"'; k++) {
-// 	  Serial.print(buffer[k]);
-// 	}
-
-// 	unsigned long value = 0;
-// 	Serial.println();
-
-// 	for(int l = k - 1, m = 1; l > i + 22; l--){
-// 	  value += m * ((int)buffer[l] - 48);
-// 	  m *= 10;
-// 	}
-
-// 	return value;
-//       }
-//     }
-
-//     return 0;
-// }
