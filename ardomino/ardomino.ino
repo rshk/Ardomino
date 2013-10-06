@@ -1,6 +1,10 @@
 /////////////////////////////////////////////////////////////////////////////
 //
-// ArdOmino Sketch Test
+// Arduino Sketch for the Ardomino Project.
+//
+// NOTE: This is an experimental "new version" that communicates
+//       plain text lines over a TCP socket.
+//       To be merged with the original sketch in alfcrisci/ardomino.
 //
 // Biometeorological ArdOmino Skecth to monitor Air Temperature
 // and Relative Humidity.
@@ -15,9 +19,15 @@
 // ON ARDUINO AND ANDROID Universita di Parma FAC. DI INGEGNERIA CORSO DI
 // LAUREA IN INGEGNERIA INFORMATICA
 //
-// Mirko Mancin - mirkomancin90@gmail.com
+// Mirko Mancin <mirkomancin90@gmail.com>
 //   website:  www.mancio90.it
 //   forum http://forum.arduino.cc/index.php?topic=157524.0;wap2
+//
+// Samuele Santi <redshadow@hackzine.org>
+//   Author of this experimental version, trying to solve some problems
+//   (mostly with wifi connectivity).
+//   website: http://hackzine.org - http://samuelesanti.com
+//   github: https://github.com/rshk
 //
 // Library reference
 //   https://github.com/adafruit/DHT-sensor-library
@@ -25,371 +35,242 @@
 //
 /////////////////////////////////////////////////////////////////////////////
 
-// Library definition
 
-#include <WiFlyHQ.h>
-#include <SoftwareSerial.h>
-#include <dht.h>
-
-// Macro Resettig for Microcontroller
-#include <avr/io.h>
-#include <avr/wdt.h>
-#define Reset_AVR() wdt_enable(WDTO_30MS); while(1) {}
-
-// Reset every hour to prevent wifly comunication trouble
-#define Reset_After_1hour 3600000
-#define Periodo_Invio_Dati 3000     // minimun range time sending interval.(ms)
-
-// Device configuration
-const char DEVICE_NAME[] = "Ardomino Uno";
-const char DEVICE_LOCATION[] = "Firenze";
+#include "settings.h"  // See the README file for more information
 
 
-// Pin defining for DHT22 sensors and variables
-
-#define DHT22_PIN 2      // PIN defining for sensors DHT22
-int k = 0; // lecture sensor index
-
-// declared variable to lead five lecture average for readTRHSensor function .
-float tempsum = 0,
-      humsum = 0,
-      tempsum_htm = 0,
-      rhsum_htm = 0,
-      radsum = 0;
-
-// declared variables for readTRHSensor function .
-float oldt = 0, oldu = 0;
-
-dht DHT; // global variable declaration for sensor's class
-
-
-// WIFI SETTINGS wireless account RN 171 XV
+// Communication with the DHT
 //------------------------------------------------------------
 
-WiFly wifly;
+#include <DHT.h>
 
-const char mySSID[] = "Vodafone-26726417";
-const char myPassword[] = "xa5d59ivz3dbwi3";
-char MACnode[] = "00:06:66:71:d2:68";
+#define DHTPIN 2
+#define DHTTYPE DHT22
 
-//char serverName[] = "http://149.139.8.55"; // Serve IP URL to connect
+DHT dht(DHTPIN, DHTTYPE);
+float sval_humidity, sval_temperature;
 
-// Does DNS resolution work on Wifly? (I hope so..)
 
-char serverName[] = "http://ardomino-rshk.rhcloud.com";
-char serverHostName[] = "ardomino-rshk.rhcloud.com";
-
-#define serverPort 80 // port
-char* macStr;
-const char site_time[] = "hunt.net.nz";
-
-SoftwareSerial wifi(8,9);
-
-// Writing procedure
-void print_P(const prog_char *str);
-void println_P(const prog_char *str);
-
-//SENSOR SETTINGS
-float temp_air= 0.0; //sensor 1
-float rh_air= 0.0; //sensor 2
-
-unsigned long time = 0;
-unsigned long SendTime = 0;;
-
-char rh_airBuffer[8];
-char temp_airBuffer[8];
-char timestamp[8];
-
-// buffer to save for json string
-char jsonMsgHead[128];
-char jsonMsgBody[128];
-
-void setup(){
-  Serial.begin(9600);
-  Serial.println(" --- ARDOMINO MONITORING --- ");
-  delay(1000);
-  Serial.println("Ardomino  started, End Setup !");
-  randomSeed(analogRead(A2));
+/**
+ * Setup the communication with DHT sensor
+ */
+void setup_dht() {
+  Serial.println("Setting up DHT module");
+  dht.begin();
 }
 
 
-void loop() {
-    time = millis();
-    configWIFI();
-    SendTime = millis();
-
-    // light_accum = readLightSensor();
-    readTRHSensor();
-    temp_air = tempsum;
-    rh_air = humsum;
-
-    // value to string conversion
-    dtostrf(temp_air, 5, 2, temp_airBuffer);
-    dtostrf(rh_air, 5, 2, rh_airBuffer);
-
-    // define a fake time
-    sprintf(timestamp, "%d", random(1, 32000));
-
-    // Create json strings for HTTP POST
-    Serial.println("Create  JSON strings");
-
-    /*
-    sprintf(jsonMsgHead,
-	    "{\"timestamp\":%s,\"checksum\":\"%s\",\"mac\":\"%s\"\0",
-	    timestamp,
-	    "5EB63BBBE01EEED093CB22BB8F5ACDC3",
-	    MACnode);
-    sprintf(jsonMsgBody,
-	    ",\"AOnode_ID\":%s,\"AOnode_battery\":%s,\"hrel\":%s,\"tair\":%s}\0",
-	    "FirenzeDuomo",
-	    "valbatt",
-	    rh_airBuffer,
-	    temp_airBuffer);
-    */
-
-    jsonMsgHead = ""; // We don't need a message head..
-    sprintf(jsonMsgBody,
-	    "{"
-	    "\"device_name\":\"%s\","
-	    "\"location\":\"%s\","
-	    "\"sensor_name\":\"%s\","
-	    "\"sensor_value\":\"%s\","
-	    "\"sensor_units\":\"%s\"" // Beware: no comma!
-	    "}",
-	    DEVICE_NAME,
-	    DEVICE_LOCATION,
-	    "temperature",
-	    temp_airBuffer,
-	    "degC");
-
-    // JSON string length assessement to make HTTP POST
-    for(int i=0; jsonMsgBody[j] != 0; i++);
-
-    Serial.println("Send sensors readings....");
-    InvioWIFIHttp(jsonMsgBody, i);
-    Serial.println("Sensors Readings Sent!.");
-
-    // Now, do the same for the other sensors...
-    // todo: make a function to do this in a nicer way
-    // Example: ``send_sensor_value("sensor name", 123, "units");``
-
-    Reset_AVR();
-}
-
-
-// Reading Sensor procedure
-void readTRHSensor(){
-
-  // DHT22 Air temperature humidity
-  int chk = DHT.read22(DHT22_PIN); // read from sensors of temperature and umidity
-
-  switch (chk)//check
-    {
-    case 0: //return value : 0 -> Reading gone fine.
-
-      if ((DHT.temperature-oldt)>100){
-	tempsum=tempsum+oldt;} else {
-	tempsum=tempsum+DHT.temperature;
-	oldt=DHT.temperature;
-      }// writing on serial port value in %f3.1 format
-
-      humsum=DHT.humidity+humsum;
-      Serial.println(DHT.temperature,1);
-      Serial.println(DHT.humidity,1);
-
-      oldu=DHT.humidity;// writing humidity data
-
-     break;
-   case -1: //valore di ritorno : -1 -> Data read but corrupted
-     Serial.print("Checksum error");
-     tempsum=tempsum+oldt;//write temperature data
-     humsum=oldu+humsum;
-
-     break;
-   case -2: //valore di ritorno : -2 -> Time limit overload no reading.
-     Serial.print("Time out error");
-     tempsum=tempsum+oldt;//write temperature data
-     humsum=oldu+humsum;
-     break;
-   default: // Other error class done by value.
-     Serial.print("Unknown error");
-     tempsum=tempsum+oldt;////write temperature data
-     humsum=oldu+humsum;
-     break;
-   }
- tempsum=tempsum/5;
- humsum=humsum/5;
+/**
+ * Read sensor data from the DHT
+ */
+void loop_dht() {
+  sval_humidity = dht.readHumidity();
+  sval_temperature = dht.readTemperature();
 }
 
 
 
-// Wireless configuration and restart in error with next reset.
-// Function Author: Mirko Mancini
+// Serial-port communication
+//------------------------------------------------------------
 
-int configWIFI(){
-    println_P(PSTR("Starting"));
-    print_P(PSTR("Free memory: "));
-    Serial.println(wifly.getFreeMemory(),DEC);
-
-    wifi.begin(9600);    // define baud rate of Serial ArdOmino port
-    if (!wifly.begin(&wifi, &Serial)) {
-        println_P(PSTR("Failed to start wifly"));
-	Reset_AVR();
-    }
-
-    char buf[32];
-    /* Join wifi network if not already associated */
-    if (!wifly.isAssociated()) {
-	/* Setup the WiFly to connect to a wifi network */
-	println_P(PSTR("Joining network"));
-	wifly.setSSID(mySSID);
-	//wifly.setPassphrase(myPassword);
-        wifly.setKey(myPassword);
-	wifly.enableDHCP();
-
-	if (wifly.join()) {
-	    println_P(PSTR("Joined wifi network"));
-	} else {
-	    println_P(PSTR("Failed to join wifi network"));
-	    Reset_AVR();
-	}
-    } else {
-        println_P(PSTR("Already joined network"));
-    }
-
-    print_P(PSTR("MAC: "));
-    macStr = (char *)(wifly.getMAC(buf, sizeof(buf)));
-    Serial.println(macStr);
-    print_P(PSTR("IP: "));
-    Serial.println(wifly.getIP(buf, sizeof(buf)));
-    print_P(PSTR("Netmask: "));
-    Serial.println(wifly.getNetmask(buf, sizeof(buf)));
-    print_P(PSTR("Gateway: "));
-    Serial.println(wifly.getGateway(buf, sizeof(buf)));
-    print_P(PSTR("SSID: "));
-    Serial.println(wifly.getSSID(buf, sizeof(buf)));
-
-    wifly.setDeviceID("Wifly-WebClient");
-    print_P(PSTR("DeviceID: "));
-    Serial.println(wifly.getDeviceID(buf, sizeof(buf)));
-
-    if (wifly.isConnected()) {
-        println_P(PSTR("Old connection active. Closing"));
-	wifly.close();
-    }
-
-    if (wifly.open(serverName, serverPort)) {
-        print_P(PSTR("Connected to "));
-	Serial.println(serverName);
-
-	Serial.println("WIFI ALREADY");
-    } else {
-        println_P(PSTR("Failed to connect"));
-	Reset_AVR();
-    }
+void setup_serial() {
+  Serial.begin(115200);
+  Serial.println("--- Ardomino Serial Console ---");
 }
 
-// to print variable in memory
-void print_P(const prog_char *str)
-{
-    char ch;
-    while ((ch=pgm_read_byte(str++)) != 0) {
-	Serial.write(ch);
-    }
-}
 
-void println_P(const prog_char *str)
-{
-    print_P(str);
+/**
+ * Send read data through the serial port
+ */
+void loop_serial() {
+  if (isnan(sval_humidity) || isnan(sval_temperature)) {
+    Serial.println("ERROR: Failed reading values from DHT");
+  }
+  else {
+    Serial.print("DATA:");
+    Serial.print(" humidity=");
+    Serial.print(sval_humidity);
+    Serial.print(" temperature=");
+    Serial.print(sval_temperature);
     Serial.println();
-}
-
-
-// Sending Json formatted data procedure
-// Waiting server's response to send next data packet.
-// Function Author Mirko Mancini
-
-void InvioWIFIHttp(char* jsonStringBody, int lungh)
-{
-  // todo: we can calculate content-length inside this function
-  // todo: can we use something smarter, like a "printf()", for sending headers?
-
-  Serial.println("Create POST request");
-
-  wifly.print("POST / HTTP/1.0\r\n");
-  wifly.print("Content-type: application/json\r\n");
-
-  // We need to pass the Host header, on most web servers
-  wifly.print("Host: ");
-  wifly.print(serverHostName);
-  wifly.print("\r\n");
-
-  wifly.print("Content-Length: ");
-  wifly.print(lungh);
-  wifly.print("\r\n");
-
-  wifly.print("\r\n");
-  //wifly.print(jsonStringHead);
-  wifly.print(jsonStringBody);
-
-
-  Serial.println("Waiting server 's response");
-
-  // Waiting server 's response
-  while (wifly.available()==0) {}
-
-  if (wifly.available() > 0) {
-    char buf[200] = "buffer";
-    int exit = 0;
-
-    while(exit<2){
-      wifly.gets(buf, sizeof(buf));
-      Serial.println(buf);
-      if(buf[0]==0){
-	exit++;
-      }
-      if(buf[0]=='{'){
-	delay(50);
-	long timeSend = parsingJSONString(buf, sizeof(buf));
-	timeSend *= 1000;
-
-	// Wating this value to reset microcontroller
-	delay(timeSend);
-      }
-    }
   }
 }
 
 
-// function for raw JSON  parsing code Author Mirko Mancini
+// Wifi communication (via WiFly module)
+//------------------------------------------------------------
 
-long parsingJSONString(char buffer[], int len){
-    int k;
-    unsigned long m;
+#include <WiFlyHQ.h>
+#include <SoftwareSerial.h>
 
-    for (int i = 0; i < len; i++) {
-      if (
-	  (buffer[i]=='"') &&
-	  (buffer[i+1]=='c') &&
-	  (buffer[i+2]=='f') &&
-	  (buffer[i+3]=='g') &&
-	  (buffer[i+4]=='"')) {
+SoftwareSerial wifiSerial(8,9);
+WiFly wifly;
 
-	for (k = i + 23; buffer[k] != '"'; k++) {
-	  Serial.print(buffer[k]);
+// Todo: read these from some configuration file!
+const char mySSID[] = WIFI_SSID;
+const char myPassword[] = WIFI_PASSWORD;
+
+// The server to which to POST the data..
+const char site[] = SERVER_ADDR;
+const int site_port = SERVER_PORT;
+
+void terminal();
+
+void setup_wifly() {
+    char buf[32];
+
+    Serial.println("WiFly Module initialization");
+    Serial.print("    Free memory: ");
+    Serial.println(wifly.getFreeMemory(),DEC);
+
+    wifiSerial.begin(9600);
+    if (!wifly.begin(&wifiSerial, &Serial)) {
+        Serial.println("    ERROR: Failed to start wifly");
+	terminal();
+    }
+
+    /* Join wifi network if not already associated */
+    if (!wifly.isAssociated()) {
+	/* Setup the WiFly to connect to a wifi network */
+	Serial.println("    INFO: Joining network");
+	wifly.setSSID(mySSID);
+	wifly.setPassphrase(myPassword);
+	wifly.enableDHCP();
+
+	if (wifly.join()) {
+	    Serial.println("    INFO: Joined wifi network");
+	} else {
+	    Serial.println("    ERROR: Failed to join wifi network");
+	    terminal();
 	}
+    } else {
+        Serial.println("    INFO: Already joined network");
+    }
 
-	unsigned long value = 0;
-	Serial.println();
+    //terminal();
 
-	for(int l = k - 1, m = 1; l > i + 22; l--){
-	  value += m * ((int)buffer[l] - 48);
-	  m *= 10;
+    Serial.print("    MAC: ");
+    Serial.println(wifly.getMAC(buf, sizeof(buf)));
+    Serial.print("    IP: ");
+    Serial.println(wifly.getIP(buf, sizeof(buf)));
+    Serial.print("    Netmask: ");
+    Serial.println(wifly.getNetmask(buf, sizeof(buf)));
+    Serial.print("    Gateway: ");
+    Serial.println(wifly.getGateway(buf, sizeof(buf)));
+
+    wifly.setDeviceID("Wifly-WebClient");
+    Serial.print("    DeviceID: ");
+    Serial.println(wifly.getDeviceID(buf, sizeof(buf)));
+
+    if (wifly.isConnected()) {
+        Serial.println("    INFO: Old connection active. Closing");
+	wifly.close();
+    }
+
+    // Try to make a HTTP request..
+    if (wifly.open(site, site_port)) {
+        Serial.print("    INFO: Connected to ");
+	Serial.println(site);
+
+	/* Send the request */
+	// wifly.println("GET / HTTP/1.0");
+	// wifly.println();
+	wifly.println("HELLO");
+    } else {
+        Serial.println("    ERROR: Failed to connect");
+    }
+}
+
+uint32_t connectTime = 0;
+
+void loop_wifly() {
+
+  int available;
+
+  // If not already connected, we need to establish
+  // a TCP connection to the server
+
+  if (wifly.isConnected() == false) {
+	Serial.println("INFO: WiFly: Connecting to server");
+
+	if (wifly.open(site, site_port)) {
+	  Serial.print("INFO: WiFly: Connected to ");
+	  connectTime = millis(); // ???
 	}
+	else {
+	    Serial.print("ERROR: WiFly: Failed to connect to ");
+	}
+	Serial.print(site);
+	Serial.print(":");
+	Serial.println(site_port);
+  }
+  else {
+    available = wifly.available();
+    if (available < 0) {
+      Serial.println("WARNING: WiFly: Disconnected");
+    }
 
-	return value;
+    else {
+      // Print data from WiFly to serial port
+      Serial.print("INFO: WiFly: [data] ");
+      Serial.write(wifly.read());
+      Serial.println(" [/data]");
+
+      // Send sensor data
+      Serial.println("INFO: WiFly: Sending sensors data");
+      wifly.print("DATA:");
+      wifly.print(" humidity=");
+      wifly.print(sval_humidity);
+      wifly.print(" temperature=");
+      wifly.print(sval_temperature);
+      wifly.println();
+
+      // Disconnect after 10 seconds
+      if ((millis() - connectTime) > 10000) {
+	Serial.println("INFO: WiFly: Disconnecting...");
+	wifly.close();
       }
     }
 
-    return 0;
+    /* Send data from the serial monitor to the TCP server */
+    // if (Serial.available()) {
+    //   wifly.write(Serial.read());
+    // }
+  }
+}
+
+
+// Connect the WiFly serial to the serial monitor.
+void terminal() {
+  Serial.println("Opening WiFly <-> Serial communication..");
+    while (1) {
+	if (wifly.available() > 0) {
+	    Serial.write(wifly.read());
+	}
+	if (Serial.available() > 0) {
+	    wifly.write(Serial.read());
+	}
+    }
+}
+
+
+
+
+
+// Standard setup/loop functions
+//------------------------------------------------------------
+
+void setup() {
+  setup_serial();
+  setup_dht();
+  setup_wifly();
+  Serial.println("*** Initialization done");
+}
+
+
+void loop() {
+  loop_dht();
+  loop_serial();
+  loop_wifly();
+  delay(500);
 }
