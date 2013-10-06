@@ -38,6 +38,8 @@
 
 #include "settings.h"  // See the README file for more information
 
+const int MAX_CONNECTION_TIME = 30000; // In milliseconds
+
 
 // Communication with the DHT
 //------------------------------------------------------------
@@ -206,15 +208,22 @@ void loop_wifly() {
   }
   else {
     available = wifly.available();
+
     if (available < 0) {
       Serial.println("WARNING: WiFly: Disconnected");
     }
 
     else {
       // Print data from WiFly to serial port
-      Serial.print("INFO: WiFly: [data] ");
-      Serial.write(wifly.read());
-      Serial.println(" [/data]");
+      if (available > 0) {
+	String recvdata = "";
+        while (wifly.available() > 0) {
+	  recvdata += wifly.read();
+	}
+	Serial.print("INFO: WiFly: [data] ");
+	Serial.print(recvdata);
+	Serial.println(" [/data]");
+      }
 
       // Send sensor data
       Serial.println("INFO: WiFly: Sending sensors data");
@@ -226,7 +235,7 @@ void loop_wifly() {
       wifly.println();
 
       // Disconnect after 10 seconds
-      if ((millis() - connectTime) > 10000) {
+      if ((millis() - connectTime) > MAX_CONNECTION_TIME) {
 	Serial.println("INFO: WiFly: Disconnecting...");
 	wifly.close();
       }
